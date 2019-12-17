@@ -1,0 +1,8 @@
+(library
+  (name        irmin_mem)
+  (public_name irmin-mem)
+  (libraries   irmin libcassandra)
+  (c_names cstub)
+  )
+
+
