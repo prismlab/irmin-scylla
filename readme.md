@@ -9,10 +9,10 @@ https://github.com/datastax/cpp-driver
 Instructions to build it can be found at: https://datastax.github.io/cpp-driver/topics/building/
 
 To use the C* driver with OCaml, we can add it to opam libraries as an external stub.
-Dune and other files for the same can be found at: <git hub link>
+Dune and other files for the same can be found at: https://github.com/prismlab/irmin-scylla/tree/master/irmin-master/src/libcassandra
 The folder structure in the git repo is designed to accomodate the correct placing of the libraries. 
 In my setup, I have named the directory containing the driver and other related files as `libcassandra` . It can be added to opam using:
-`opam pin add libcassandra -k path < path to root folder>`
+`opam pin add libcassandra -k path < path to root folder>` (irmin-master is the root folder)
 
 ### Installing the Scylla backend
 Installing the Scylla backend is quite straight forward, just like any other backend. Since the backend is supposed to interact with the external driver which is written in C++, we have a C stub to convert some of the basic types between OCaml and C/C++. Dune is modified to install this file along with few library dependencies which are required to connect with the driver. These are system based libraries.
@@ -26,7 +26,7 @@ According to my observation, two containers on the same machine automatically fo
 
 ### Examples
 This repository also contains a simple example for setting a key-value pair to database in one node and fetching it back from another. 
-I have also checked in one piece of code which I run on `utop` for testing purpose, just in case it comes handy.
+I have also checked-in one piece of code which I run on `utop` for testing purpose, just in case it comes handy.
 
 
 ### Note
@@ -43,5 +43,5 @@ CREATE TABLE irmin_scylla.append_only (
     value blob);
 ```
 
-- Scylla as of now in its docker version does not support Light weight transactions. The original backend was written keeping Cassandra in mind, hence the implementation of test-and-set function uses Light weight transactions. Hence the second insertion on the same branch would throw an error from the database.  Small modificaition in the query can be fix the issue. 
+- Scylla as of now in its docker version does not support Light weight transactions. The original backend was written keeping Cassandra in mind, hence the implementation of test-and-set function uses Light weight transactions. Hence the second insertion on the same branch would throw an error from the database.  Small modificaition in the query can fix the issue. 
 The trunk version of Scylla has implemented the Light weight transactions, hence this code could come handy if that code is used or if the C* is used instead of Scylla. Hence the modification is not made in the original code. 
