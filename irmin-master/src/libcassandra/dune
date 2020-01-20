@@ -1,0 +1,23 @@
+(rule
+ (deps (source_tree cpp-driver))
+ (targets liblibcassandra.a dlllibcassandra.so)
+ (action (progn
+          
+          (copy cpp-driver/libcassandra.so dlllibcassandra.so)
+          (copy cpp-driver/libcassandra.a liblibcassandra.a)
+          ))
+          )
+                  
+(rule
+ (targets c_library_flag.sexp)
+ (action  (run config/discover.exe)))
+ 	
+ 	
+(library
+(name libcassandra)
+(public_name libcassandra)
+(foreign_archives libcassandra)
+(libraries ctypes posix-types ctypes.foreign)
+(c_library_flags (:include c_library_flag.sexp)))
+
+

@@ -1,0 +1,4 @@
+(executable
+(name get)
+(libraries lwt irmin irmin-mem)
+(link_flags (-cclib -lstdc++ -cclib -lssl -cclib -lcrypto)))

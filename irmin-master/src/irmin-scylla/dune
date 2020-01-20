@@ -1,0 +1,10 @@
+(library
+  (name        irmin_scylla)
+  (public_name irmin-scylla)
+  (libraries   irmin libcassandra)
+  (foreign_stubs 
+  (language    c)
+  (names       cstub))
+  )
+
+

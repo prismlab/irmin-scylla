@@ -1,0 +1,6 @@
+(executable
+ (name discover)
+ (libraries dune.configurator)
+ (link_flags (-cclib -lstdc++ -cclib -lssl -cclib -lcrypto))
+ )
+
