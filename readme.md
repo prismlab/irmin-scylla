@@ -12,7 +12,9 @@ To use the C* driver with OCaml, we can add it to opam libraries as an external 
 Dune and other files for the same can be found at: https://github.com/prismlab/irmin-scylla/tree/master/irmin-master/src/libcassandra
 The folder structure in the git repo is designed to accomodate the correct placing of the libraries. 
 In my setup, I have named the directory containing the driver and other related files as `libcassandra` . It can be added to opam using:
-`opam pin add libcassandra -k path < path to root folder>` (irmin-master is the root folder)
+`opam pin add libcassandra -k path < path to root folder>` (irmin-master is the root folder).
+
+The installation may ask to first install `ctypes`, `ctypes-foreign`, and `posix-types`, if not already installed in the current switch. It can be installed directly from opam.
 
 ### Installing the Scylla backend
 Installing the Scylla backend is quite straight forward, just like any other backend. Since the backend is supposed to interact with the external driver which is written in C++, we have a C stub to convert some of the basic types between OCaml and C/C++. Dune is modified to install this file along with few library dependencies which are required to connect with the driver. These are system based libraries.
@@ -45,3 +47,5 @@ CREATE TABLE irmin_scylla.append_only (
 
 - Scylla as of now in its docker version does not support Light weight transactions. The original backend was written keeping Cassandra in mind, hence the implementation of test-and-set function uses Light weight transactions. Hence the second insertion on the same branch would throw an error from the database.  Small modificaition in the query can fix the issue. 
 The trunk version of Scylla has implemented the Light weight transactions, hence this code could come handy if that code is used or if the C* is used instead of Scylla. Hence the modification is not made in the original code. 
+
+-Remember to include `c-flags` in dune when running the applications, as shown in the examples.
