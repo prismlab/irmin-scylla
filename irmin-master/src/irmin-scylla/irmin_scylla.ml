@@ -154,7 +154,7 @@ let cx_stmt session query keyStr valStr =
 
   get_error_code future statement
 
-let src = Logs.Src.create "irmin.mem" ~doc:"Irmin in-memory store"
+let src = Logs.Src.create "irmin.scylla" ~doc:"Irmin scylla store"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
