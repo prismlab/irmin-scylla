@@ -66,6 +66,9 @@ external ml_cass_statement_free : cassStatement -> unit = "cass_statement_free"
 external ml_cass_statement_bind_string : cassStatement -> int -> string -> unit
   = "cass_statement_bind_string"
 
+external ml_cass_statement_bind_bytes :
+  cassStatement -> int -> bytes -> int -> unit = "cass_statement_bind_bytes"
+
 external ml_cass_future_get_result : cassFuture -> cassResult
   = "cass_future_get_result"
 
@@ -101,6 +104,13 @@ external cstub_convert_to_bool : bool -> bool = "convert_to_bool"
 
 external cstub_convert_to_ml : int -> int = "convert_to_ml"
 
+external cstub_get_string_length : cassValue -> int = "get_string_length"
+
+external cstub_get_string_null :
+  cassValue ->
+  (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t ->
+  unit = "get_string_null"
+
 let get_error_code future statement =
   let rc = ml_cass_future_error_code future in
   let response = cstub_match_enum rc future in
@@ -112,11 +122,13 @@ let get_error_code future statement =
 let create_cluster hosts =
   let cluster = ml_cass_cluster_new () in
   ml_cass_cluster_set_contact_points cluster hosts;
+
   cluster
 
 let connect_session sess cluster =
   let future = ml_cass_session_connect sess cluster in
   ml_cass_future_wait future;
+
   let rc = ml_cass_future_error_code future in
   let response = cstub_match_enum rc future in
   response
@@ -158,8 +170,6 @@ let src = Logs.Src.create "irmin.scylla" ~doc:"Irmin scylla store"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-(* let config () = Irmin.Private.Conf.empty *)
-
 let config ip =
   let config = Irmin.Private.Conf.empty in
   let module C = Irmin.Private.Conf in
@@ -175,11 +185,11 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
 
   let v _config =
     let sess = ml_cass_session_new () in
-    (* let hosts = "172.17.0.2" in *)
-    let hosts = (match Irmin.Private.Conf.get _config Irmin.Private.Conf.root with
-      | Some ip -> ip 
-      | None -> "") in
-
+    let hosts =
+      match Irmin.Private.Conf.get _config Irmin.Private.Conf.root with
+      | Some ip -> ip
+      | None -> ""
+    in
     let cluster = create_cluster hosts in
     let response = connect_session sess cluster in
     match response with
@@ -190,7 +200,6 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
         Lwt.return map
     | true ->
         let map = { t = sess } in
-        
         Lwt.return map
 
   let close t =
@@ -198,7 +207,7 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
     ml_cass_future_wait future;
 
     ignore @@ ml_cass_future_free future;
-    
+
     Lwt.return_unit
 
   let pp_key = Irmin.Type.pp K.t
@@ -207,11 +216,13 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
     Log.debug (fun f -> f "find %a" pp_key key);
 
     let keyStr = Irmin.Type.to_string K.t key in
-    
     let query =
       "select value from irmin_scylla.append_only where key = '" ^ keyStr ^ "'"
     in
     let statement = ml_cass_statement_new query (cstub_convert 0) in
+    let future = ml_cass_session_execute t statement in
+    ml_cass_future_wait future;
+
     let future = ml_cass_session_execute t statement in
     ml_cass_future_wait future;
 
@@ -223,13 +234,31 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
       if cstub_convert_to_ml rowcount > 0 then (
         let row = ml_cass_result_first_row result in
         let value = ml_cass_row_get_column row (cstub_convert 0) in
-        let valStr = cstub_get_string value in
+        let valStr_length = cstub_get_string_length value in
+        let buf =
+          Bigarray.Array1.create Bigarray.Char Bigarray.c_layout valStr_length
+        in
+        cstub_get_string_null value buf;
+
+        let contentBytes = Bytes.create valStr_length in
+        for i = 0 to valStr_length - 1 do
+          let content = buf.{i} in
+          Bytes.set contentBytes i content
+        done;
+
+        let contentStr = Bytes.to_string contentBytes in
         ml_cass_future_free future;
         ml_cass_statement_free statement;
 
-        match Irmin.Type.of_string V.t valStr with
+        let item = Irmin.Type.of_bin_string V.t contentStr in
+        match item with
         | Ok s -> Lwt.return_some s
-        | _ -> Lwt.return_none )
+        | Error (`Msg e) ->
+            print_string
+              ( "\nIrmin.Type.of_bin_string parsing error: Irmin_scylla:313: "
+              ^ e );
+
+            Lwt.return_none )
       else (
         ml_cass_future_free future;
         ml_cass_statement_free statement;
@@ -243,6 +272,7 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
 
   let mem { t; _ } key =
     Log.debug (fun f -> f "mem %a" pp_key key);
+
     (let map = { t } in
      find map key)
     >>= fun v ->
@@ -260,9 +290,23 @@ module Append_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
     Log.debug (fun f -> f "add -> %a" pp_key key);
 
     let keyStr = Irmin.Type.to_string K.t key in
-    let valStr = Irmin.Type.to_string V.t value in
-    let query = "INSERT INTO irmin_scylla.append_only (key, value) VALUES (?, ?)" in
-    ignore @@ cx_stmt t.t query keyStr valStr;
+    let valStr = Irmin.Type.to_bin_string V.t value in
+    let query =
+      "INSERT INTO irmin_scylla.append_only (key, value) VALUES (?, ?)"
+    in
+    let valCount = cstub_convert 2 in
+    let statement = ml_cass_statement_new query valCount in
+    let bytstr = Bytes.of_string valStr in
+    let bytstrlen = Bytes.length bytstr in
+    ml_cass_statement_bind_string statement (cstub_convert 0) keyStr;
+    ml_cass_statement_bind_bytes statement (cstub_convert 1) bytstr
+      (cstub_convert bytstrlen);
+
+    let future = ml_cass_session_execute t.t statement in
+    ml_cass_future_wait future;
+
+    get_error_code future statement;
+
     Lwt.return_unit
 end
 
@@ -292,13 +336,14 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
   let v config = RO.v config >>= fun t -> Lwt.return { t; w = watches; lock }
 
   (*equivalent of what is returned above is: {t = { t = sess}; w = watches; lock} *)
+
   let close t = W.clear t.w >>= fun () -> RO.close t.t
 
   let aw_find t key =
-    (* Log.debug (fun f -> f "find %a" pp_key key); *)
     let keyStr = Irmin.Type.to_string K.t key in
     let query =
-      "select value from irmin_scylla.atomic_write where key = '" ^ keyStr ^ "'"
+      "select value from irmin_scylla.atomic_write where key = '" ^ keyStr
+      ^ "'"
     in
     let statement = ml_cass_statement_new query (cstub_convert 0) in
     let future = ml_cass_session_execute t statement in
@@ -363,7 +408,6 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
 
   let list t =
     Log.debug (fun f -> f "list");
-
     let valCount = cstub_convert 0 in
     let query = "select key from irmin_scylla.atomic_write" in
     let statement = ml_cass_statement_new query valCount in
@@ -379,7 +423,6 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
       let result = ml_cass_future_get_result future in
       let rows = ml_cass_iterator_from_result result in
       let lst = func rows in
-      
       ml_cass_future_free future;
       ml_cass_statement_free statement;
 
@@ -388,7 +431,9 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
 
   let set t key value =
     L.with_lock t.lock key (fun () ->
-        let query = "INSERT INTO irmin_scylla.atomic_write (key, value) VALUES (?, ?)" in
+        let query =
+          "INSERT INTO irmin_scylla.atomic_write (key, value) VALUES (?, ?)"
+        in
         let keyStr = Irmin.Type.to_string K.t key in
         let valStr = Irmin.Type.to_string V.t value in
         ignore @@ cx_stmt t.t.t query keyStr valStr;
@@ -417,24 +462,26 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
         let tns =
           match setStr with
           | "" ->
-              let query = "DELETE from irmin_scylla.atomic_write WHERE key = ?" in
+              let query =
+                "DELETE from irmin_scylla.atomic_write WHERE key = ?"
+              in
               let response = del_stmt t.t.t query keyStr in
               if response then Lwt.return true else Lwt.return false
           | _ ->
               if (*IF makes the transaction light weight*)
                  testStr = "" then (
                 let query =
-                  "INSERT INTO irmin_scylla.atomic_write (key, value) VALUES (?, ?)"
+                  "INSERT INTO irmin_scylla.atomic_write (key, value) VALUES \
+                   (?, ?)"
                 in
                 ignore @@ cx_stmt t.t.t query keyStr setStr;
                 Lwt.return true )
               else
                 let query =
-                  "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = ? IF \
-                   value = ?"
+                  "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = \
+                   ? IF value = ?"
                 in
                 let _ = tns_stmt t.t.t query keyStr testStr setStr in
-                (*do it more efficiently*)
                 find t key >>= fun findval ->
                 let valu =
                   match findval with
