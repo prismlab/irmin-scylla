@@ -453,9 +453,9 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
 
     L.with_lock t.lock key (fun () ->
         let keyStr = Irmin.Type.to_string K.t key in
-        let testStr =
+        (* let testStr =
           match test with Some v -> Irmin.Type.to_string V.t v | None -> ""
-        in
+        in *)
         let setStr =
           match set with Some v -> Irmin.Type.to_string V.t v | None -> ""
         in
@@ -468,22 +468,23 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
               let response = del_stmt t.t.t query keyStr in
               if response then Lwt.return true else Lwt.return false
           | _ ->
-              if (*IF makes the transaction light weight*)
-                 testStr = "" then (
+              (* if 
+                 testStr = "" then ( *)
                 let query =
                   "INSERT INTO irmin_scylla.atomic_write (key, value) VALUES \
                    (?, ?)"
                 in
                 ignore @@ cx_stmt t.t.t query keyStr setStr;
-                Lwt.return true )
-              else
+                Lwt.return true (*)*)
+              (* else
                 let query =
                   "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = \
                    ? IF value = ?"
                 in
-                let _ = tns_stmt t.t.t query keyStr testStr setStr in 
+                let _ = tns_stmt t.t.t query keyStr testStr setStr in  *)
 
-                (*find t key >>= fun oldval ->
+                (* Below code was used when I was not using LWT but still checking for the heirarchy
+                find t key >>= fun oldval ->
                 let oldval = 
                    match oldval with 
                   | Some v -> Irmin.Type.to_string V.t v
@@ -498,13 +499,13 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
                 );*)
                 
 
-                find t key >>= fun findval ->
+                (* find t key >>= fun findval ->
                 let valu =
                   match findval with
                   | Some v -> Irmin.Type.to_string V.t v
                   | None -> ""
                 in
-                if valu = setStr then Lwt.return true else Lwt.return false
+                if valu = setStr then Lwt.return true else Lwt.return false *)
         in
         tns)
 end
