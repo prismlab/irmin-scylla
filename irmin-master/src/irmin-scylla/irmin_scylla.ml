@@ -138,7 +138,7 @@ let tns_stmt session query keyStr testStr setStr =
   let statement = ml_cass_statement_new query valCount in
   ml_cass_statement_bind_string statement (cstub_convert 0) setStr;
   ml_cass_statement_bind_string statement (cstub_convert 1) keyStr;
-  ml_cass_statement_bind_string statement (cstub_convert 2) testStr;
+  ml_cass_statement_bind_string statement (cstub_convert 2) testStr; 
 
   let future = ml_cass_session_execute session statement in
   ml_cass_future_wait future;
@@ -255,7 +255,7 @@ module Read_only (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
         | Ok s -> Lwt.return_some s
         | Error (`Msg e) ->
             print_string
-              ( "\nIrmin.Type.of_bin_string parsing error: Irmin_scylla:313: "
+              ( "\nIrmin.Type.of_bin_string parsing error: Irmin_scylla: "
               ^ e );
 
             Lwt.return_none )
@@ -481,7 +481,23 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
                   "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = \
                    ? IF value = ?"
                 in
-                let _ = tns_stmt t.t.t query keyStr testStr setStr in
+                let _ = tns_stmt t.t.t query keyStr testStr setStr in 
+
+                (*find t key >>= fun oldval ->
+                let oldval = 
+                   match oldval with 
+                  | Some v -> Irmin.Type.to_string V.t v
+                  | None -> ""
+                in
+                if oldval = testStr then (
+                  let query =
+                    "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = \
+                    ?"
+                  in
+                  ignore @@ tns_stmt t.t.t query keyStr setStr
+                );*)
+                
+
                 find t key >>= fun findval ->
                 let valu =
                   match findval with
