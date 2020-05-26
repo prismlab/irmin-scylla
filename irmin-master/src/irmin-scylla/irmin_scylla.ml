@@ -452,10 +452,8 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
     Log.debug (fun f -> f "test_and_set");
 
     L.with_lock t.lock key (fun () ->
+        ignore @@ test;
         let keyStr = Irmin.Type.to_string K.t key in
-        (* let testStr =
-          match test with Some v -> Irmin.Type.to_string V.t v | None -> ""
-        in *)
         let setStr =
           match set with Some v -> Irmin.Type.to_string V.t v | None -> ""
         in
@@ -468,44 +466,12 @@ module Atomic_write (K : Irmin.Type.S) (V : Irmin.Type.S) = struct
               let response = del_stmt t.t.t query keyStr in
               if response then Lwt.return true else Lwt.return false
           | _ ->
-              (* if 
-                 testStr = "" then ( *)
                 let query =
                   "INSERT INTO irmin_scylla.atomic_write (key, value) VALUES \
                    (?, ?)"
                 in
                 ignore @@ cx_stmt t.t.t query keyStr setStr;
-                Lwt.return true (*)*)
-              (* else
-                let query =
-                  "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = \
-                   ? IF value = ?"
-                in
-                let _ = tns_stmt t.t.t query keyStr testStr setStr in  *)
-
-                (* Below code was used when I was not using LWT but still checking for the heirarchy
-                find t key >>= fun oldval ->
-                let oldval = 
-                   match oldval with 
-                  | Some v -> Irmin.Type.to_string V.t v
-                  | None -> ""
-                in
-                if oldval = testStr then (
-                  let query =
-                    "UPDATE irmin_scylla.atomic_write SET value = ? WHERE key = \
-                    ?"
-                  in
-                  ignore @@ tns_stmt t.t.t query keyStr setStr
-                );*)
-                
-
-                (* find t key >>= fun findval ->
-                let valu =
-                  match findval with
-                  | Some v -> Irmin.Type.to_string V.t v
-                  | None -> ""
-                in
-                if valu = setStr then Lwt.return true else Lwt.return false *)
+                Lwt.return true 
         in
         tns)
 end
