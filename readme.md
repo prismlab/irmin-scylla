@@ -1,3 +1,5 @@
+Cassandra and Scylla are completely interchangeable names for the following document. Both the databases can be used with the same driver. 
+
 # Installation
 Working with Irmin-scylla requires two installations:
 - Installing scylla driver to communicate with OCaml programs
@@ -24,6 +26,9 @@ The installation may ask to first install `ctypes`, `ctypes-foreign`, and `posix
 Installing the Scylla backend is quite straight forward, just like any other backend. Since the backend is supposed to interact with the external driver which is written in C++, we have a C stub to convert some of the basic types between OCaml and C/C++. Dune is modified to install this file along with few library dependencies which are required to connect with the driver. These are system based libraries.
 Irmin-scylla can be installed using:
 `opam pin add irmin-scylla -k path < path to root folder>`
+
+### Setting up the Cassandra database
+Cassandra can be installed using the standard installation steps from the website. Once up and running, it can be checked using `nodetool status`. 
 
 ### Setting up the scylla database
 Currently I am using the containerized version of the scylla database, for which instructions can be found at: https://docs.scylladb.com/operating-scylla/procedures/tips/best_practices_scylla_on_docker/
