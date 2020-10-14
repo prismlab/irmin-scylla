@@ -6,6 +6,7 @@
 
 #include <caml/memory.h>
 #include <caml/alloc.h>
+#include <caml/bigarray.h>
 
 #include "cassandra.h"
 
@@ -46,7 +47,33 @@ CAMLprim value match_enum(value rc, value future){
   }
  }
 
-CAMLprim value get_string(value val){
+CAMLprim value get_string_length(value val)
+{
+  CAMLparam1(val);
+  const cass_byte_t* text;
+  size_t text_length;
+  
+  cass_value_get_bytes((const CassValue*)val, &text, &text_length);
+  int length = (int) text_length;
+  
+  CAMLreturn(Val_int(length));
+}
+
+CAMLprim value get_string_null(value val, value buf){
+  
+  CAMLparam2(val, buf);
+  const cass_byte_t* text;
+  size_t text_length;
+  
+  cass_value_get_bytes((const CassValue*)val, &text, &text_length);
+  int length = (int) text_length;
+   
+  memcpy((char*)Caml_ba_data_val(buf), text, (long)length);
+  
+  CAMLreturn (Val_unit);
+}
+
+ CAMLprim value get_string(value val){
   
   CAMLparam1(val);
   CAMLlocal1(var_value);
@@ -54,10 +81,8 @@ CAMLprim value get_string(value val){
   size_t text_length;
   
   cass_value_get_string((const CassValue*)val, &text, &text_length);
-  
   int c = 0;
   int length = (int)text_length;
-  
   char sub [length];
   
   while (c < length) {
@@ -65,6 +90,9 @@ CAMLprim value get_string(value val){
       c++;
   }
   sub[c] = '\0';
+    
   var_value = caml_copy_string(sub);
+  
   CAMLreturn(var_value);
  }
+ 
